@@ -1,0 +1,8 @@
+# The cache of the air quality data: only api.php reads it, never the browser directly
+<IfModule mod_authz_core.c>
+  Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+  Order allow,deny
+  Deny from all
+</IfModule>

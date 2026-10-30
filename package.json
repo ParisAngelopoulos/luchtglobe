@@ -1,0 +1,14 @@
+{
+    "private": true,
+    "scripts": {
+        "build:data": "node tools/build-data.js data",
+        "vendor": "cp node_modules/globe.gl/dist/globe.gl.min.js vendor/"
+    },
+    "devDependencies": {
+        "globe.gl": "2.46.2",
+        "topojson-client": "^3.1.0",
+        "world-atlas": "^2.0.2",
+        "world-cities-json": "^1.0.1",
+        "world-countries": "^5.1.0"
+    }
+}

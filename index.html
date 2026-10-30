@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Luchtglobe · live luchtvervuiling per land</title>
+    <meta name="description" content="Een 3D-wereldbol met de luchtkwaliteit van nu in elk land: fijnstof, stikstofdioxide en ozon, elke 10 minuten bijgewerkt.">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="stars" aria-hidden="true"></div>
+    <div id="globe" aria-label="Wereldbol met de luchtkwaliteit per land"></div>
+
+    <header class="topbar">
+        <div class="brand">
+            <h1>Luchtglobe</h1>
+            <p>Hoe schoon is de lucht nu, overal ter wereld?</p>
+        </div>
+        <div class="live" id="live">
+            <span class="dot"></span>
+            <span id="live-text">Data laden…</span>
+        </div>
+    </header>
+
+    <nav class="metrics" id="metrics" aria-label="Kies wat je wilt zien"></nav>
+
+    <aside class="panel" id="panel">
+        <div class="search">
+            <input id="search" type="search" placeholder="Zoek een land…" list="country-list" autocomplete="off">
+            <datalist id="country-list"></datalist>
+        </div>
+        <div id="panel-body">
+            <p class="muted">Even geduld, de luchtkwaliteit wordt opgehaald…</p>
+        </div>
+    </aside>
+
+    <div class="legend" id="legend"></div>
+
+    <footer class="credits">
+        Modelgegevens van <a href="https://atmosphere.copernicus.eu/" target="_blank" rel="noopener">Copernicus (CAMS)</a> via <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>, gemeten in de hoofdstad van elk land ·
+        een project van <a href="https://parisangelopoulos.com">Paris Angelopoulos</a>
+    </footer>
+
+    <script src="vendor/globe.gl.min.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
