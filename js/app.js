@@ -11,14 +11,14 @@ const METRICS = {
 };
 
 const LEVELS = [
-  { name: 'Goed', color: '#50f0e6', text: 'De lucht is schoon. Prima om buiten te sporten.' },
-  { name: 'Redelijk', color: '#50ccaa', text: 'De lucht is redelijk schoon. Voor bijna iedereen geen probleem.' },
-  { name: 'Matig', color: '#f0e641', text: 'Mensen met astma of hartklachten merken het misschien.' },
-  { name: 'Slecht', color: '#ff5050', text: 'Gevoelige mensen kunnen beter niet lang buiten sporten.' },
-  { name: 'Zeer slecht', color: '#c0145a', text: 'Ook gezonde mensen kunnen last krijgen. Beperk inspanning buiten.' },
-  { name: 'Extreem slecht', color: '#7d2181', text: 'Ongezonde lucht voor iedereen. Blijf zoveel mogelijk binnen.' },
+  { name: 'Goed', color: '#cfe0c3', text: 'De lucht is schoon. Prima om buiten te sporten.' },
+  { name: 'Redelijk', color: '#f2e3a0', text: 'De lucht is redelijk schoon. Voor bijna iedereen geen probleem.' },
+  { name: 'Matig', color: '#f2b766', text: 'Mensen met astma of hartklachten merken het misschien.' },
+  { name: 'Slecht', color: '#df7348', text: 'Gevoelige mensen kunnen beter niet lang buiten sporten.' },
+  { name: 'Zeer slecht', color: '#b8323a', text: 'Ook gezonde mensen kunnen last krijgen. Beperk inspanning buiten.' },
+  { name: 'Extreem slecht', color: '#6b1d3a', text: 'Ongezonde lucht voor iedereen. Blijf zoveel mogelijk binnen.' },
 ];
-const NO_DATA = '#334155';
+const NO_DATA = '#c9c4b8';
 
 const state = { metric: 'aqi', features: [], locations: {}, data: null, selected: null, hovered: null, timer: null };
 
@@ -48,39 +48,35 @@ function colorOf(feature) {
 
 // ---------- The globe ----------
 
-// On a wide screen the globe gets the space left of the panel; on a phone the top part
 const isMobile = () => window.innerWidth <= 820;
 function resize() {
-  globe.width(isMobile() ? window.innerWidth : window.innerWidth - 380).height(isMobile() ? window.innerHeight * 0.62 : window.innerHeight);
+  const box = $('globe');
+  globe.width(box.clientWidth).height(box.clientHeight);
 }
 
 const globe = Globe()($('globe'))
   .backgroundColor('rgba(0,0,0,0)')
-  .showAtmosphere(true)
-  .atmosphereColor('#60a5fa')
-  .atmosphereAltitude(0.2)
-  .polygonCapColor(f => (f === state.hovered && f !== state.selected ? '#ffffff' : colorOf(f)))
-  .polygonSideColor(() => 'rgba(15, 23, 42, 0.6)')
-  .polygonStrokeColor(f => (f === state.selected ? '#ffffff' : 'rgba(15, 23, 42, 0.9)'))
-  .polygonAltitude(f => (f === state.selected ? 0.07 : f === state.hovered ? 0.04 : 0.01))
+  .showAtmosphere(false)
+  .polygonCapColor(colorOf)
+  .polygonSideColor(() => 'rgba(60, 55, 45, 0.35)')
+  .polygonStrokeColor(f => (f === state.selected || f === state.hovered ? '#1c1b19' : 'rgba(255, 255, 255, 0.7)'))
+  .polygonAltitude(f => (f === state.selected ? 0.03 : f === state.hovered ? 0.015 : 0.006))
   .polygonsTransitionDuration(300)
   .polygonLabel(tooltip)
   .onPolygonHover(f => {
     state.hovered = f;
-    globe.polygonAltitude(globe.polygonAltitude()).polygonCapColor(globe.polygonCapColor());
+    globe.polygonAltitude(globe.polygonAltitude()).polygonStrokeColor(globe.polygonStrokeColor());
     document.body.style.cursor = f ? 'pointer' : '';
   })
-  .onPolygonClick(f => select(f.properties.iso3))
-  .ringColor(() => t => `rgba(255, 80, 80, ${1 - t})`)
-  .ringMaxRadius(4)
-  .ringPropagationSpeed(2)
-  .ringRepeatPeriod(1400);
+  .onPolygonClick(f => select(f.properties.iso3));
 
-globe.globeMaterial().color.set('#0b1c3d');
+globe.globeMaterial().color.set('#e3e7e6');
+globe.globeMaterial().emissive.set('#9aa3a1');
+globe.globeMaterial().emissiveIntensity = 0.45;
 window.addEventListener('resize', resize);
 resize();
 globe.controls().autoRotate = true;
-globe.controls().autoRotateSpeed = 0.4;
+globe.controls().autoRotateSpeed = 0.25;
 globe.pointOfView({ lat: 25, lng: 10, altitude: isMobile() ? 3.4 : 2.3 });
 $('globe').addEventListener('pointerdown', () => { globe.controls().autoRotate = false; });
 
@@ -94,14 +90,11 @@ function tooltip(f) {
   const lines = Object.keys(METRICS).map(m => `<div class="line"><span>${METRICS[m].label}</span><b>${format(c[m], m)}</b></div>`).join('');
   return `<div class="tip"><strong>${esc(f.properties.name)}</strong>
     <div class="muted small">gemeten in ${esc(place ? place.city : '')}</div>
-    <div style="margin:6px 0"><span class="badge" style="background:${l.color}">${l.name}</span></div>${lines}</div>`;
+    <div style="margin:4px 0 6px"><span class="sw" style="background:${l.color}"></span>${l.name}</div>${lines}</div>`;
 }
 
 function repaint() {
   globe.polygonCapColor(globe.polygonCapColor()).polygonAltitude(globe.polygonAltitude()).polygonStrokeColor(globe.polygonStrokeColor());
-  // Pulsing rings on the five most polluted countries of the chosen metric
-  const worst = ranking().slice(0, 5).map(r => state.locations[r.iso3]).filter(Boolean);
-  globe.ringsData(worst.map(p => ({ lat: p.lat, lng: p.lon })));
 }
 
 // ---------- Data ----------
@@ -151,7 +144,7 @@ async function loadLive() {
     try {
       data = await fetchDirect();
     } catch (e2) {
-      setLive('error', 'Geen verbinding met de meetdata. Nieuwe poging over een minuut…');
+      setLive('error', 'De metingen konden niet worden opgehaald. Over een minuut wordt het opnieuw geprobeerd.');
       state.timer = setTimeout(loadLive, 60000);
       return;
     }
@@ -177,9 +170,9 @@ function updateLiveText() {
   const left = Math.max(0, Math.round((state.nextAt - Date.now()) / 1000));
   const mm = String(Math.floor(left / 60)).padStart(2, '0') + ':' + String(left % 60).padStart(2, '0');
   if (state.data.stale) {
-    setLive('stale', `Laatst bekende meting van ${time} · nieuwe poging over ${mm}`);
+    setLive('stale', `Laatst bekende meting: ${time} uur. Nieuwe poging over ${mm}.`);
   } else {
-    setLive('', `Live · meting van ${time} · update over ${mm}`);
+    setLive('', `Meting van ${time} uur, volgende update over ${mm}.`);
   }
 }
 setInterval(updateLiveText, 1000);
@@ -197,7 +190,7 @@ function ranking(metric = state.metric) {
 function rankItem(r, nr) {
   const p = state.locations[r.iso3];
   const l = level(r.value);
-  return `<li data-iso3="${r.iso3}"><span class="nr">${nr}</span><span class="name">${esc(p.name)}<br><span class="city">${esc(p.city)}</span></span><span class="badge" style="background:${l.color}">${Math.round(r.value)}</span></li>`;
+  return `<tr data-iso3="${r.iso3}"><td class="nr">${nr}</td><td>${esc(p.name)} <span class="city">${esc(p.city)}</span></td><td class="val"><span class="sw" style="background:${l.color}"></span>${Math.round(r.value)}</td></tr>`;
 }
 
 function renderPanel() {
@@ -208,17 +201,12 @@ function renderPanel() {
   const avg = list.reduce((s, r) => s + r.value, 0) / list.length;
   const good = list.filter(r => level(r.value) === LEVELS[0] || level(r.value) === LEVELS[1]).length;
   $('panel-body').innerHTML = `
-    <div class="stats">
-      <div class="stat"><strong>${list.length}</strong><span>landen gemeten</span></div>
-      <div class="stat"><strong style="color:${level(avg).color}">${format(avg)}</strong><span>gemiddeld</span></div>
-      <div class="stat"><strong>${Math.round(good / list.length * 100)}%</strong><span>goed of redelijk</span></div>
-      <div class="stat"><strong>${m.who ? format(m.who) : '20'}</strong><span>${m.who ? 'WHO-advieswaarde' : 'grens van "goed"'}</span></div>
-    </div>
-    <h2>Meest vervuild nu · ${esc(m.label)}</h2>
-    <ul class="ranking">${list.slice(0, 10).map((r, i) => rankItem(r, i + 1)).join('')}</ul>
-    <h2>Schoonste lucht nu</h2>
-    <ul class="ranking">${list.slice(-5).reverse().map((r, i) => rankItem(r, list.length - i)).join('')}</ul>
-    <p class="muted small" style="margin-top:18px">Klik op een land op de wereldbol of in de lijst voor alle waarden.</p>`;
+    <p class="summary">In <b>${list.length}</b> landen gemeten. Gemiddeld <b>${format(avg)}</b>${m.who ? ` (WHO-advies: ${format(m.who)})` : ''}; in <b>${Math.round(good / list.length * 100)}%</b> van de landen is de lucht goed of redelijk.</p>
+    <h2>Meest vervuild</h2>
+    <table class="ranking">${list.slice(0, 10).map((r, i) => rankItem(r, i + 1)).join('')}</table>
+    <h2>Schoonste lucht</h2>
+    <table class="ranking">${list.slice(-5).reverse().map((r, i) => rankItem(r, list.length - i)).join('')}</table>
+    <p class="muted small" style="margin-top:14px">Klik op een land voor alle waarden.</p>`;
   bindRanking();
 }
 
@@ -227,7 +215,7 @@ function renderCountry(iso3) {
   const f = state.features.find(x => x.properties.iso3 === iso3);
   const c = state.data && state.data.countries[iso3];
   if (!c || !p) {
-    $('panel-body').innerHTML = `<button class="back" id="back">← Terug naar de ranglijst</button><div class="country-head"><h3>${esc(f ? f.properties.name : iso3)}</h3></div><p class="muted">Voor dit land is er geen meting.</p>`;
+    $('panel-body').innerHTML = `<button class="back" id="back">← Terug naar de ranglijst</button><div class="country"><h3>${esc(f ? f.properties.name : iso3)}</h3></div><p class="muted">Voor dit land is er geen meting.</p>`;
     $('back').onclick = deselect;
     return;
   }
@@ -245,17 +233,17 @@ function renderCountry(iso3) {
   }).join('');
   $('panel-body').innerHTML = `
     <button class="back" id="back">← Terug naar de ranglijst</button>
-    <div class="country-head"><div><h3>${esc(p.name)}</h3><div class="muted small">gemeten in ${esc(p.city)}</div></div></div>
-    <div class="big" style="background:${aqiLevel ? aqiLevel.color : NO_DATA}"><strong>${c.aqi === null ? '–' : Math.round(c.aqi)}</strong><span>${aqiLevel ? aqiLevel.name : 'Geen index'}</span></div>
+    <div class="country"><h3>${esc(p.name)}</h3><div class="muted small">gemeten in ${esc(p.city)}</div></div>
+    <div class="score"><strong>${c.aqi === null ? '–' : Math.round(c.aqi)}</strong><span><span class="sw" style="background:${aqiLevel ? aqiLevel.color : NO_DATA}"></span>${aqiLevel ? aqiLevel.name : 'Geen index'} <span class="muted small">op de Europese index</span></span></div>
     <p>${aqiLevel ? aqiLevel.text : ''}</p>
     <p class="muted small">Plaats ${place} van ${ranking('aqi').length} op de luchtkwaliteitsindex (1 = meest vervuild)${c.us_aqi !== null && c.us_aqi !== undefined ? ' · Amerikaanse AQI: ' + Math.round(c.us_aqi) : ''}.</p>
     ${rows}
-    <p class="muted small" style="margin-top:16px">Het witte streepje is de advieswaarde van de WHO. Waarden in µg/m³ (microgram per kubieke meter lucht).</p>`;
+    <p class="muted small" style="margin-top:16px">Het zwarte streepje is de advieswaarde van de WHO. Waarden in µg/m³ (microgram per kubieke meter lucht).</p>`;
   $('back').onclick = deselect;
 }
 
 function bindRanking() {
-  document.querySelectorAll('.ranking li').forEach(li => li.addEventListener('click', () => select(li.dataset.iso3)));
+  document.querySelectorAll('.ranking tr').forEach(li => li.addEventListener('click', () => select(li.dataset.iso3)));
 }
 
 function select(iso3) {
@@ -292,9 +280,9 @@ function renderMetrics() {
 function renderLegend() {
   const m = METRICS[state.metric];
   const edges = [0, ...m.bands];
-  $('legend').innerHTML = `<strong>${esc(m.name)}${m.unit ? ' (' + m.unit + ')' : ''}</strong>` +
-    LEVELS.map((l, i) => `<div><i style="background:${l.color}"></i>${l.name} <span class="muted">${i < m.bands.length ? edges[i] + '–' + edges[i + 1] : '> ' + edges[i]}</span></div>`).join('') +
-    `<div><i style="background:${NO_DATA}"></i><span class="muted">geen meting</span></div>`;
+  $('legend').innerHTML = `<strong>${esc(m.name)}${m.unit ? ' (' + m.unit + ')' : ''}</strong><div class="scale">` +
+    LEVELS.map((l, i) => `<div title="${l.name}"><i style="background:${l.color}"></i><span>${i < m.bands.length ? edges[i] + '–' + edges[i + 1] : '> ' + edges[i]}</span></div>`).join('') +
+    `</div><div class="none"><span class="sw" style="background:${NO_DATA}"></span>geen meting</div>`;
 }
 
 $('search').addEventListener('change', e => {
@@ -302,16 +290,6 @@ $('search').addEventListener('change', e => {
   const p = Object.values(state.locations).find(x => x.name.toLowerCase() === name);
   if (p) select(p.iso3);
 });
-
-// A starry sky behind the globe
-(function stars() {
-  const dots = [];
-  for (let i = 0; i < 260; i++) {
-    const a = (Math.random() * 0.6 + 0.2).toFixed(2);
-    dots.push(`${Math.round(Math.random() * 3000)}px ${Math.round(Math.random() * 2000)}px rgba(255,255,255,${a})`);
-  }
-  document.querySelector('.stars').style.setProperty('--stars', dots.join(','));
-})();
 
 renderMetrics();
 renderLegend();
