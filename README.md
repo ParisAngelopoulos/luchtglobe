@@ -21,7 +21,9 @@ Een 3D-wereldbol die laat zien hoe vervuild de lucht **nu** is in elk land. Elk 
 - **Vijf weergaven**: de Europese luchtkwaliteitsindex, fijnstof PM2.5 en PM10, stikstofdioxide en ozon.
 - **Muis over een land**: alle waarden in één oogopslag.
 - **Klik op een land** (of zoek het op): de index, een uitleg wat het betekent, en per stof een balk met de advieswaarde van de WHO.
-- **Ranglijst**: de tien meest vervuilde en de vijf schoonste landen van dit moment, met pulserende ringen op de vijf slechtste.
+- **Ranglijst**: de tien meest vervuilde en de vijf schoonste landen van dit moment.
+- **Toen en nu**: fijnstof van tien jaar geleden naast dat van nu (jaargemiddelden, 2014 en 2024). Groen is schoner geworden, rood vuiler. Met een grafiek van het wereldgemiddelde, de grootste verbeteringen en verslechteringen, en per land het verloop sinds 1998. Met de knop *Per jaar* schuif of speel je door de jaren.
+- **Woestijnen**: de grote woestijnen met hun naam op de wereldbol, en per land of de kale grond (zand, rots, zoutvlakten) groeit of krimpt, gemeten met satellieten van 1992 tot 2022. Ook hier kun je per jaar kijken.
 - **Live-indicator** met de tijd van de meting en een aftelklok tot de volgende update.
 - Werkt ook op een telefoon (de lijst schuift dan onder de wereldbol).
 
@@ -31,6 +33,7 @@ Een 3D-wereldbol die laat zien hoe vervuild de lucht **nu** is in elk land. Elk 
 2. **De live data**: `api.php` vraagt voor alle hoofdsteden de actuele luchtkwaliteit op bij [Open-Meteo](https://open-meteo.com/en/docs/air-quality-api), in stukken van 50 plaatsen per verzoek. Die cijfers komen uit het model van [Copernicus (CAMS)](https://atmosphere.copernicus.eu/) en worden elk uur vernieuwd.
 3. **De cache**: het antwoord blijft 10 minuten in `private/cache.json` staan, zodat alle bezoekers samen één verzoek doen. Een bestandsslot voorkomt dat twee bezoekers tegelijk gaan ophalen. Lukt het ophalen niet, dan toont de site de laatst bekende meting.
 4. **De pagina**: `js/app.js` kleurt de landen, bouwt het paneel en vraagt op tijd nieuwe data op. Zonder PHP (als je de bestanden los opent) haalt de pagina de data rechtstreeks bij Open-Meteo.
+5. **De geschiedenis**: `tools/build-history.js` haalt de jaarcijfers op en zet ze in `data/history.json` (fijnstof per land per jaar, en kale grond per land per jaar) en `data/deserts.geojson` (de omtrek van de woestijnen). `js/history.js` maakt daar de weergaven *Toen en nu* en *Woestijnen* van. Komt er een nieuw jaar bij de bronnen, draai dan `npm run build:history` opnieuw.
 
 ## Zelf draaien
 
@@ -50,16 +53,21 @@ Ga daarna naar http://localhost:8000. De landendata opnieuw bouwen kan met `npm 
 | --- | --- |
 | `index.html`, `css/`, `js/app.js` | De pagina, de opmaak en de wereldbol |
 | `api.php` | Haalt de live data op en bewaart die 10 minuten |
-| `data/` | Landsgrenzen en het meetpunt (hoofdstad) per land |
+| `data/` | Landsgrenzen, het meetpunt per land, de jaarcijfers en de woestijnen |
 | `private/` | De cache (niet via het web te openen) |
 | `vendor/globe.gl.min.js` | De wereldbol-bibliotheek (MIT) |
-| `tools/build-data.js` | Bouwt de bestanden in `data/` |
+| `js/history.js` | De weergaven *Toen en nu* en *Woestijnen* |
+| `tools/build-data.js` | Bouwt de landsgrenzen en meetpunten in `data/` |
+| `tools/build-history.js` | Bouwt `data/history.json` en `data/deserts.geojson` |
 
 ## Bronnen
 
 - Luchtkwaliteit: Open-Meteo, met data van Copernicus Atmosphere Monitoring Service (CAMS)
 - Landsgrenzen: Natural Earth (publiek domein), via `world-atlas`
 - Hoofdsteden: SimpleMaps World Cities Database (CC BY 4.0), via `world-cities-json`
+- Fijnstof per jaar: SatPM, Atmospheric Composition Analysis Group, Washington University in St. Louis (country level v5-gl-06), via [Our World in Data](https://ourworldindata.org/grapher/outdoor-air-pollution-exposure)
+- Kale grond per jaar: FAO, [FAOSTAT Land Cover](https://www.fao.org/faostat/en/#data/LC), op basis van ESA Climate Change Initiative Land Cover
+- Woestijnen: Natural Earth (publiek domein), *geography regions*
 - Wereldbol: [globe.gl](https://github.com/vasturiano/globe.gl) (MIT)
 
 ---

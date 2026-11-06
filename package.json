@@ -2,10 +2,13 @@
     "private": true,
     "scripts": {
         "build:data": "node tools/build-data.js data",
-        "vendor": "cp node_modules/globe.gl/dist/globe.gl.min.js vendor/"
+        "vendor": "cp node_modules/globe.gl/dist/globe.gl.min.js vendor/",
+        "build:history": "node tools/build-history.js data"
     },
     "devDependencies": {
+        "fflate": "0.8.3",
         "globe.gl": "2.46.2",
+        "simplify-js": "1.2.4",
         "topojson-client": "^3.1.0",
         "world-atlas": "^2.0.2",
         "world-cities-json": "^1.0.1",
