@@ -11,18 +11,17 @@
     <aside class="side">
         <header class="head">
             <h1>Luchtglobe</h1>
-            <p id="intro">De luchtkwaliteit van dit moment in de hoofdstad van elk land. Draai aan de wereldbol of klik op een land.</p>
+            <p id="intro">De luchtkwaliteit van dit moment in de hoofdstad van elk land. Schuif naar links om terug te gaan in de tijd.</p>
             <p class="live" id="live"><span id="live-text">Data laden…</span></p>
         </header>
 
         <nav class="modes" id="modes" aria-label="Kies een weergave">
-            <button data-mode="live" class="on">Nu</button>
-            <button data-mode="lucht">Toen en nu</button>
+            <button data-mode="lucht" class="on">Lucht</button>
             <button data-mode="woestijn">Woestijnen</button>
         </nav>
 
-        <nav class="metrics" id="metrics" aria-label="Kies wat je wilt zien"></nav>
         <div class="history-controls" id="history-controls"></div>
+        <nav class="metrics" id="metrics" aria-label="Kies wat je wilt zien"></nav>
 
         <div class="search">
             <label for="search">Zoek een land</label>
@@ -52,7 +51,7 @@
     </main>
 
     <script src="vendor/globe.gl.min.js"></script>
-    <script src="js/app.js"></script>
     <script src="js/history.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>

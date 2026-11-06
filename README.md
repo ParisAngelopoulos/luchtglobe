@@ -22,8 +22,10 @@ Een 3D-wereldbol die laat zien hoe vervuild de lucht **nu** is in elk land. Elk 
 - **Muis over een land**: alle waarden in één oogopslag.
 - **Klik op een land** (of zoek het op): de index, een uitleg wat het betekent, en per stof een balk met de advieswaarde van de WHO.
 - **Ranglijst**: de tien meest vervuilde en de vijf schoonste landen van dit moment.
-- **Toen en nu**: fijnstof van tien jaar geleden naast dat van nu (jaargemiddelden, 2014 en 2024). Groen is schoner geworden, rood vuiler. Met een grafiek van het wereldgemiddelde, de grootste verbeteringen en verslechteringen, en per land het verloop sinds 1998. Met de knop *Per jaar* schuif of speel je door de jaren.
-- **Woestijnen**: de grote woestijnen met hun naam op de wereldbol, en per land of de kale grond (zand, rots, zoutvlakten) groeit of krimpt, gemeten met satellieten van 1992 tot 2022. Ook hier kun je per jaar kijken.
+- **Terug in de tijd**: elke weergave heeft een tijdschuif met een afspeelknop.
+  - In **Lucht** staat de schuif rechts op *Nu* (de live metingen). Schuif je naar links, dan zie je per land het jaargemiddelde fijnstof (PM2.5) van dat jaar, terug tot 1998, met het wereldgemiddelde in een grafiek, de meest vervuilde en schoonste landen, en per land het verloop naast het WHO-advies van 5 µg/m³.
+  - In **Woestijnen** loopt de schuif van 1992 tot 2022.
+- **Woestijnen**: 20 grote woestijnen met hun naam op de wereldbol. Elke woestijn kleurt naar of hij sinds 1992 groter (bruin) of kleiner (groen) is geworden; de landen eromheen blijven grijs. Bovenaan staat het antwoord op de vraag *Is er meer woestijn gekomen?*, daaronder per woestijn de verandering. Klik op een woestijn voor de grafiek en de landen waar hij in ligt.
 - **Live-indicator** met de tijd van de meting en een aftelklok tot de volgende update.
 - Werkt ook op een telefoon (de lijst schuift dan onder de wereldbol).
 
@@ -33,7 +35,12 @@ Een 3D-wereldbol die laat zien hoe vervuild de lucht **nu** is in elk land. Elk 
 2. **De live data**: `api.php` vraagt voor alle hoofdsteden de actuele luchtkwaliteit op bij [Open-Meteo](https://open-meteo.com/en/docs/air-quality-api), in stukken van 50 plaatsen per verzoek. Die cijfers komen uit het model van [Copernicus (CAMS)](https://atmosphere.copernicus.eu/) en worden elk uur vernieuwd.
 3. **De cache**: het antwoord blijft 10 minuten in `private/cache.json` staan, zodat alle bezoekers samen één verzoek doen. Een bestandsslot voorkomt dat twee bezoekers tegelijk gaan ophalen. Lukt het ophalen niet, dan toont de site de laatst bekende meting.
 4. **De pagina**: `js/app.js` kleurt de landen, bouwt het paneel en vraagt op tijd nieuwe data op. Zonder PHP (als je de bestanden los opent) haalt de pagina de data rechtstreeks bij Open-Meteo.
-5. **De geschiedenis**: `tools/build-history.js` haalt de jaarcijfers op en zet ze in `data/history.json` (fijnstof per land per jaar, en kale grond per land per jaar) en `data/deserts.geojson` (de omtrek van de woestijnen). `js/history.js` maakt daar de weergaven *Toen en nu* en *Woestijnen* van. Komt er een nieuw jaar bij de bronnen, draai dan `npm run build:history` opnieuw.
+5. **De geschiedenis**: `tools/build-history.js` haalt de jaarcijfers op en zet ze in `data/history.json` en `data/deserts.geojson`.
+   - **Fijnstof**: per land per jaar sinds 1998.
+   - **Kale grond**: per land per jaar sinds 1992. Kale grond is zand, rots en zoutvlakten, de klasse *Terrestrial barren land* in de ESA-satellietkaarten.
+   - **Woestijnen**: per woestijn zoekt het script uit in welke landen hij ligt, door punten binnen de woestijn op te zoeken in de landsgrenzen. De kale grond van die landen telt het op. Het gaat om de hele landen, niet alleen het stuk woestijn, en een land zonder cijfers voor elk jaar (zoals Soedan, dat pas sinds 2012 apart wordt geteld) telt niet mee.
+   - **De pagina**: `js/history.js` maakt er de tijdschuif en de woestijnweergave van.
+   - **Een nieuw jaar**: komt er een nieuw jaar bij de bronnen, draai dan `npm run build:history` opnieuw.
 
 ## Zelf draaien
 
@@ -56,7 +63,7 @@ Ga daarna naar http://localhost:8000. De landendata opnieuw bouwen kan met `npm 
 | `data/` | Landsgrenzen, het meetpunt per land, de jaarcijfers en de woestijnen |
 | `private/` | De cache (niet via het web te openen) |
 | `vendor/globe.gl.min.js` | De wereldbol-bibliotheek (MIT) |
-| `js/history.js` | De weergaven *Toen en nu* en *Woestijnen* |
+| `js/history.js` | De tijdschuif en de weergave *Woestijnen* |
 | `tools/build-data.js` | Bouwt de landsgrenzen en meetpunten in `data/` |
 | `tools/build-history.js` | Bouwt `data/history.json` en `data/deserts.geojson` |
 

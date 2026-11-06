@@ -16,7 +16,8 @@ const SOURCES = {
 };
 
 // Only the countries that are on the globe
-const onMap = new Set(JSON.parse(fs.readFileSync(out + '/countries.geojson', 'utf8')).features.map(f => f.properties.iso3));
+const shapes = JSON.parse(fs.readFileSync(out + '/countries.geojson', 'utf8')).features;
+const onMap = new Set(shapes.map(f => f.properties.iso3));
 const byNumeric = Object.fromEntries(countries.filter(c => c.ccn3).map(c => [String(c.ccn3).padStart(3, '0'), c.cca3]));
 
 async function get(url, binary) {
@@ -100,8 +101,9 @@ async function land() {
 
 async function deserts() {
   const geo = JSON.parse(await get(SOURCES.deserts));
-  // Two regions that Natural Earth tags as desert, but are not
-  const skip = new Set(['PUNJAB', 'CAATINGAS']);
+  // Two regions that Natural Earth tags as desert, but are not; and the smaller deserts that
+  // lie inside the Sahara, so only the Sahara itself is shown there
+  const skip = new Set(['PUNJAB', 'CAATINGAS', 'WESTERN DESERT', 'LIBYAN DESERT', 'NUBIAN DESERT']);
   const ring = r => {
     const pts = simplify(r.map(([x, y]) => ({ x, y })), 0.08, true).map(p => [Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100]);
     return pts.length >= 4 ? pts : null;
@@ -110,7 +112,7 @@ async function deserts() {
   const features = [];
   for (const f of geo.features) {
     const p = f.properties;
-    if (p.FEATURECLA !== 'Desert' || skip.has(p.NAME)) continue;
+    if (p.FEATURECLA !== 'Desert' || skip.has(p.NAME) || (p.REGION === 'Africa' && p.SCALERANK >= 4)) continue;
     const g = f.geometry;
     const coordinates = g.type === 'Polygon' ? polygon(g.coordinates) : g.coordinates.map(polygon).filter(Boolean);
     if (!coordinates || !coordinates.length) continue;
@@ -119,11 +121,51 @@ async function deserts() {
   return { type: 'FeatureCollection', features };
 }
 
+// Point in polygon (ray casting), for [lon, lat] rings
+function inRing(pt, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+const polygons = g => (g.type === 'Polygon' ? [g.coordinates] : g.coordinates);
+const inShape = (pt, g) => polygons(g).some(poly => inRing(pt, poly[0]) && !poly.slice(1).some(hole => inRing(pt, hole)));
+
+// Which countries a desert lies in: sample points every 0.25° inside the desert and look up the
+// country of each. Countries with at least 4% of the points count.
+function desertCountries(geometry) {
+  const pts = polygons(geometry).flatMap(p => p[0]);
+  const lons = pts.map(p => p[0]), lats = pts.map(p => p[1]);
+  const count = {};
+  let total = 0;
+  for (let lat = Math.min(...lats); lat <= Math.max(...lats); lat += 0.25) {
+    for (let lon = Math.min(...lons); lon <= Math.max(...lons); lon += 0.25) {
+      if (!inShape([lon, lat], geometry)) continue;
+      total++;
+      const c = shapes.find(f => inShape([lon, lat], f.geometry));
+      if (c) count[c.properties.iso3] = (count[c.properties.iso3] || 0) + 1;
+    }
+  }
+  return Object.entries(count).filter(([, n]) => n / total >= 0.04).sort((a, b) => b[1] - a[1]).map(([iso3]) => iso3);
+}
+
 (async () => {
   const [pm, ld, ds] = await Promise.all([pm25(), land(), deserts()]);
+  // Bare land per desert: the sum of the countries it lies in
+  ld.deserts = {};
+  for (const f of ds.features) {
+    // Only countries with a figure for every year (Sudan, for example, only has figures from 2012)
+    const list = desertCountries(f.geometry).filter(iso3 => ld.countries[iso3] && ld.countries[iso3].km2.every(v => v !== null));
+    f.properties.countries = list;
+    if (!list.length) continue;
+    ld.deserts[f.properties.name] = { countries: list, km2: ld.years.map((y, i) => list.reduce((s, iso3) => s + (ld.countries[iso3].km2[i] || 0), 0)) };
+  }
   fs.writeFileSync(out + '/history.json', JSON.stringify({ built: new Date().toISOString().slice(0, 10), pm25: pm, bare: ld }));
   fs.writeFileSync(out + '/deserts.geojson', JSON.stringify(ds));
   console.log(`PM2.5 ${pm.years[0]}–${pm.years.at(-1)}: ${Object.keys(pm.countries).length} countries`);
   console.log(`Bare land ${ld.years[0]}–${ld.years.at(-1)}: ${Object.keys(ld.countries).length} countries`);
   console.log(`${ds.features.length} deserts`);
+  for (const [name, d] of Object.entries(ld.deserts)) console.log(`  ${name}: ${d.countries.join(', ')}  ${((d.km2.at(-1) - d.km2[0]) / d.km2[0] * 100).toFixed(1)}%`);
 })().catch(e => { console.error(e); process.exit(1); });
