@@ -100,8 +100,9 @@ body:not([data-mode="live"]) .metrics, body:not([data-mode="live"]) .live, body:
 .answer span { font-size: 14px; }
 .explain { font-size: 14px; margin: 16px 0 0; }
 .tag { padding: 0 6px; font-weight: 600; }
-.tag.brown { background: #c4813a; color: #fff; }
-.tag.green { background: #6fae7c; color: #fff; }
+.tag.sand { background: #e3c27c; color: #4a3210; }
+.tag.red { background: #c2562e; color: #fff; }
+.tag.green { background: #5f9e6e; color: #fff; }
 .ranking.deserts td:first-child { padding-left: 2px; }
 .link { font: inherit; font-size: 14px; background: none; border: 0; padding: 0; margin-top: 14px; color: var(--link); cursor: pointer; }
 

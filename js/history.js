@@ -1,6 +1,7 @@
 // Luchtglobe: going back in time. In "Lucht" a slider runs from 1998 to now: right is the live
 // data, further left the yearly average of fine particulate matter. In "Woestijnen" a slider runs
-// from 1992 to 2022 and every desert is coloured by whether it has grown or shrunk since 1992.
+// from 1982 to 2024 and the globe shows where it was desert that year (less than 250 mm of rain),
+// compared with 1982: desert then and now, new desert, and land that is no longer desert.
 // Loaded before app.js; uses state, globe and the helpers from app.js when it runs.
 
 const WHO_YEAR = 5; // WHO guideline for the annual average of PM2.5 (2021)
@@ -11,11 +12,15 @@ const SCALES = {
   lucht: { title: 'Fijnstof PM2.5, jaargemiddelde (µg/m³)', steps: [
     [5, '#cfe0c3', '0–5 (WHO-advies)'], [10, '#f2e3a0', '5–10'], [15, '#f2b766', '10–15'],
     [25, '#df7348', '15–25'], [35, '#b8323a', '25–35'], [Infinity, '#6b1d3a', 'meer dan 35']] },
-  woestijn: { title: 'Woestijn sinds 1992', steps: [
-    [-5, '#2f7d4f', '5% of meer kleiner'], [-1, '#6fae7c', '1–5% kleiner'], [-0.25, '#b5d6b0', 'iets kleiner'],
-    [0.25, '#ead9ad', 'even groot'], [1, '#e0a95c', 'iets groter'], [5, '#c4813a', '1–5% groter'], [Infinity, '#8f4f17', '5% of meer groter']] },
+};
+// The three desert areas of a year, compared with the first year
+const LAYERS = {
+  stable: { color: '#e3c27c', label: 'woestijn, ook al in {first}' },
+  gained: { color: '#c2562e', label: 'nieuwe woestijn sinds {first}' },
+  lost: { color: '#5f9e6e', label: 'geen woestijn meer sinds {first}' },
 };
 const LAND = '#ece8df'; // countries in the desert view: plain, so the deserts stand out
+const BIG_DESERT = 150000; // km²: smaller deserts lie on the edge of the rain limit and swing too much for a list
 
 const nl = new Intl.NumberFormat('nl-NL');
 const nl1 = new Intl.NumberFormat('nl-NL', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -35,9 +40,11 @@ const History = {
     this.loading = this.loading || Promise.all([
       fetch('data/history.json').then(r => r.json()),
       fetch('data/deserts.geojson').then(r => r.json()),
-    ]).then(([data, deserts]) => {
+      fetch('data/dry.json').then(r => r.json()),
+    ]).then(([data, deserts, dry]) => {
       this.data = data;
-      this.year.woestijn = data.bare.years.at(-1);
+      this.dry = dry;
+      this.year.woestijn = dry.years.at(-1);
       this.deserts = deserts.features.map(f => ({ ...f, properties: { ...f.properties, desert: true } }));
       this.labels = this.deserts.map(d => ({ ...labelPoint(d.geometry), name: d.properties.name, size: d.properties.rank <= 2 ? 1.4 : 0.9 }));
     });
@@ -50,7 +57,7 @@ const History = {
   },
 
   years(mode = state.mode) {
-    return mode === 'lucht' ? this.data.pm25.years : this.data.bare.years;
+    return mode === 'lucht' ? this.data.pm25.years : this.dry.years;
   },
 
   pm(iso3, year) {
@@ -63,20 +70,38 @@ const History = {
     return s ? s[key][this.data.bare.years.indexOf(year)] ?? null : null;
   },
 
-  // How much a desert has grown (+) or shrunk (−) since the first year, in percent
-  desertChange(name, year = this.year.woestijn) {
-    const d = this.data.bare.deserts[name];
-    if (!d) return null;
-    const a = d.km2[0], b = d.km2[this.data.bare.years.indexOf(year)];
-    return a ? (b - a) / a * 100 : null;
+  // The desert area of a year as three shapes for the globe
+  dryLayers() {
+    const layers = this.dry.layers[this.year.woestijn];
+    return ['stable', 'gained', 'lost'].map(layer => ({ type: 'Feature', geometry: layers[layer], properties: { desert: true, layer } }))
+      .filter(f => f.geometry.coordinates.length);
+  },
+
+  stroke(f) {
+    return f.properties.layer === 'stable' ? 'rgba(150, 105, 40, 0.6)' : 'rgba(0, 0, 0, 0)';
+  },
+
+  area(name, year = this.year.woestijn) {
+    const s = name ? this.dry.deserts[name] : this.dry.total;
+    return s ? s[this.dry.years.indexOf(year)] : null;
+  },
+
+  // The trend over all years, in percent per ten years: steadier than comparing two single years
+  trend(name) {
+    const v = name ? this.dry.deserts[name] : this.dry.total;
+    const ys = this.dry.years;
+    const mx = ys.reduce((a, b) => a + b, 0) / ys.length, my = v.reduce((a, b) => a + b, 0) / v.length;
+    let num = 0, den = 0;
+    ys.forEach((y, i) => { num += (y - mx) * (v[i] - my); den += (y - mx) * (y - mx); });
+    return num / den * 10 / my * 100;
+  },
+
+  verdict(t) {
+    return t > 1 ? 'groeit' : t < -1 ? 'krimpt' : 'blijft ongeveer even groot';
   },
 
   color(f) {
-    if (state.mode === 'woestijn') {
-      if (!f.properties.desert) return LAND;
-      const c = this.desertChange(f.properties.name);
-      return c === null ? '#ead9ad' : stepOf(SCALES.woestijn, c)[1];
-    }
+    if (state.mode === 'woestijn') return f.properties.desert ? LAYERS[f.properties.layer].color : LAND;
     const v = this.pm(f.properties.iso3, this.year.lucht);
     return v === null ? NO_DATA : stepOf(SCALES.lucht, v)[1];
   },
@@ -84,15 +109,14 @@ const History = {
   tooltip(f) {
     const y = this.year[state.mode];
     if (f.properties.desert) {
-      const c = this.desertChange(f.properties.name);
-      return `<div class="tip"><strong>${esc(f.properties.name)}</strong>${c === null ? '<span class="muted">geen gegevens</span>'
-        : `<div class="line"><span>sinds ${this.years()[0]}</span><b>${pct(c)}</b></div><div class="muted small">${c > 0.25 ? 'groter geworden' : c < -0.25 ? 'kleiner geworden' : 'ongeveer even groot'} · klik voor meer</div>`}</div>`;
+      const label = LAYERS[f.properties.layer].label.replace('{first}', this.years()[0]);
+      return `<div class="tip"><strong>${esc(label[0].toUpperCase() + label.slice(1))}</strong><span class="muted small">in ${y} · klik voor de woestijn</span></div>`;
     }
     const iso3 = f.properties.iso3;
     if (state.mode === 'woestijn') {
-      const a = this.bare(iso3, this.years()[0]), b = this.bare(iso3, y);
+      const a = this.bare(iso3, this.data.bare.years[0]), b = this.bare(iso3, Math.min(y, this.data.bare.years.at(-1)));
       if (a === null || b === null) return `<div class="tip"><strong>${esc(f.properties.name)}</strong><span class="muted">Geen gegevens</span></div>`;
-      return `<div class="tip"><strong>${esc(f.properties.name)}</strong><div class="line"><span>kale grond ${this.years()[0]}</span><b>${nl1.format(a)}%</b></div><div class="line"><span>kale grond ${y}</span><b>${nl1.format(b)}%</b></div></div>`;
+      return `<div class="tip"><strong>${esc(f.properties.name)}</strong><div class="line"><span>kale grond ${this.data.bare.years[0]}</span><b>${nl1.format(a)}%</b></div><div class="line"><span>kale grond ${Math.min(y, this.data.bare.years.at(-1))}</span><b>${nl1.format(b)}%</b></div></div>`;
     }
     const v = this.pm(iso3, y), now = this.pm(iso3, this.years().at(-1));
     if (v === null) return `<div class="tip"><strong>${esc(f.properties.name)}</strong><span class="muted">Geen gegevens</span></div>`;
@@ -100,6 +124,11 @@ const History = {
   },
 
   legend() {
+    if (state.mode === 'woestijn') {
+      $('legend').innerHTML = `<strong>Woestijn in ${this.year.woestijn}</strong><div class="steps">` +
+        Object.values(LAYERS).map(l => `<div><i style="background:${l.color}"></i>${esc(l.label.replace('{first}', this.years()[0]))}</div>`).join('') + '</div>';
+      return;
+    }
     const s = SCALES[state.mode];
     $('legend').innerHTML = `<strong>${esc(s.title)}</strong><div class="steps">` +
       s.steps.map(([, c, label]) => `<div><i style="background:${c}"></i>${esc(label)}</div>`).join('') +
@@ -132,7 +161,8 @@ const History = {
       $('year').value = this.year[mode] ?? years.at(-1) + 1;
       $('year-out').textContent = this.year[mode] ?? 'Nu';
     }
-    if (mode === 'lucht' && wasActive !== this.active()) showMode();
+    // The desert view draws new shapes every year; Lucht only changes colours, unless it goes from or to Nu
+    if (mode === 'woestijn' || wasActive !== this.active()) showMode();
     else { repaint(); renderPanel(); }
   },
 
@@ -155,15 +185,28 @@ const History = {
     if ($('play')) $('play').textContent = '▶';
   },
 
-  selectDesert(f) {
+  selectDesert(name) {
+    const f = this.deserts.find(d => d.properties.name === name);
+    if (!f) return;
     state.selected = null;
-    this.selectedDesert = f;
+    this.selectedDesert = name;
     globe.controls().autoRotate = false;
     const p = labelPoint(f.geometry);
     globe.pointOfView({ lat: p.lat, lng: p.lng, altitude: isMobile() ? 2.4 : 1.7 }, 1000);
-    repaint();
     renderPanel();
     document.querySelector('.side').scrollTop = 0;
+  },
+
+  // A click on the desert area: the nearest named desert
+  clickDesert(where) {
+    if (!where) return;
+    let best = null, bestD = Infinity;
+    for (const l of this.labels) {
+      if (!this.dry.deserts[l.name]) continue;
+      const dx = (l.lng - where.lng) * Math.cos(where.lat * Math.PI / 180), dy = l.lat - where.lat;
+      if (dx * dx + dy * dy < bestD) { bestD = dx * dx + dy * dy; best = l.name; }
+    }
+    if (best && bestD < 20 * 20) this.selectDesert(best);
   },
 
   // ---------- Panel ----------
@@ -190,61 +233,51 @@ const History = {
   },
 
   panelWoestijn() {
-    const d = this.data.bare;
+    const d = this.dry;
     const first = d.years[0], y = this.year.woestijn;
-    const i = d.years.indexOf(y);
-    const k0 = d.world.km2[0], ky = d.world.km2[i];
+    const k0 = d.total[0], ky = this.area(null);
     const change = (ky - k0) / k0 * 100;
-    const answer = y === first ? 'Kies een later jaar met de schuifbalk' : change > 0.25 ? 'Ja, de woestijn is gegroeid' : change < -0.25 ? 'Nee, er is iets minder woestijn' : 'Ongeveer evenveel';
-    const deserts = Object.keys(d.deserts).map(name => ({ name, c: this.desertChange(name) })).sort((a, b) => b.c - a.c);
-    const drow = r => `<tr data-desert="${esc(r.name)}"><td><span class="sw" style="background:${stepOf(SCALES.woestijn, r.c)[1]}"></span>${esc(r.name)}</td><td class="val"><b>${pct(r.c)}</b> ${r.c > 0.25 ? '↑' : r.c < -0.25 ? '↓' : '='}</td></tr>`;
-    const countries = Object.keys(d.countries).map(iso3 => ({ iso3, a: this.bare(iso3, first, 'km2'), b: this.bare(iso3, y, 'km2') }))
-      .filter(r => r.a !== null && r.b !== null && state.locations[r.iso3]).map(r => ({ ...r, c: r.b - r.a })).sort((a, b) => b.c - a.c);
-    const crow = (r, n) => `<tr data-iso3="${r.iso3}"><td class="nr">${n}</td><td>${esc(state.locations[r.iso3].name)}</td><td class="val"><b>${r.c > 0 ? '+' : '−'}${nl.format(Math.abs(r.c))} km²</b></td></tr>`;
+    const t = this.trend(null);
+    const answer = t > 1 ? 'Ja, de woestijnen groeien' : t < -1 ? 'Nee, de woestijnen krimpen een beetje' : 'Ongeveer evenveel';
+    const deserts = Object.keys(d.deserts).filter(name => d.deserts[name].reduce((a, b) => a + b, 0) / d.years.length >= BIG_DESERT)
+      .map(name => ({ name, t: this.trend(name) })).sort((a, b) => b.t - a.t);
+    const drow = r => `<tr data-desert="${esc(r.name)}"><td>${esc(r.name)}</td><td class="val"><b>${pct(r.t)}</b> per 10 jaar ${r.t > 1 ? '↑' : r.t < -1 ? '↓' : '='}</td></tr>`;
     return `
       <div class="answer">
-        <span class="muted small">Is er sinds ${first} meer woestijn gekomen?</span>
+        <span class="muted small">Worden de woestijnen groter sinds ${first}?</span>
         <strong>${answer}</strong>
-        ${y !== first ? `<span>Wereldwijd <b>${pct(change)}</b> kale grond tussen ${first} en ${y}: ${nl.format(Math.abs(ky - k0))} km² ${ky < k0 ? 'minder' : 'meer'}, zo groot als ${nl.format(Math.round(Math.abs(ky - k0) / NL_KM2))} keer Nederland.</span>` : ''}
+        <span>Over alle jaren samen ${t > 0 ? '+' : '−'}${nl1.format(Math.abs(t))}% per 10 jaar. In ${y} was er ${nl1.format(ky / 1e6)} miljoen km² woestijn${y !== first ? `, ${nl.format(Math.abs(ky - k0))} km² ${ky < k0 ? 'minder' : 'meer'} dan in ${first} (${pct(change)})` : ''}.</span>
       </div>
-      <p class="explain"><b>Wat zie je?</b> Elke woestijn op de wereldbol kleurt naar hoeveel kale grond (zand, rots, zoutvlakten) er sinds ${first} is bijgekomen of verdwenen in de landen waar hij ligt. <span class="tag brown">bruin</span> = groter geworden, <span class="tag green">groen</span> = kleiner. Schuif door de jaren of druk op ▶.</p>
-      <h2>Kale grond op de wereld (miljoen km²)</h2>
-      ${chart({ years: d.years, values: d.world.km2.map(v => v / 1e6), marks: [first, y], color: '#9c5a1e', digits: 2 })}
-      <h2>Per woestijn, ${first} → ${y}</h2>
+      <p class="explain"><b>Wat zie je?</b> Waar het in ${y} woestijn was: daar viel minder dan 250 mm regen per jaar. <span class="tag sand">zand</span> = ook al woestijn in ${first}, <span class="tag red">roodbruin</span> = nieuwe woestijn, <span class="tag green">groen</span> = geen woestijn meer. Schuif door de jaren of druk op ▶.</p>
+      <h2>Woestijn op de wereldbol (miljoen km²)</h2>
+      ${chart({ years: d.years, values: d.total.map(v => v / 1e6), marks: [first, y], color: '#9c5a1e', digits: 1 })}
+      <p class="muted small">Natte en droge jaren wisselen elkaar af; let vooral op de lijn over veel jaren.</p>
+      <h2>Per woestijn, ${first}–${d.years.at(-1)}</h2>
       <table class="ranking deserts">${deserts.map(drow).join('')}</table>
-      <h2>Landen met de meeste nieuwe kale grond</h2><table class="ranking">${countries.filter(r => r.c > 0).slice(0, 5).map((r, n) => crow(r, n + 1)).join('') || '<tr><td>Geen land</td></tr>'}</table>
-      <h2>Landen waar het meest is gaan groeien</h2><table class="ranking">${countries.filter(r => r.c < 0).reverse().slice(0, 5).map((r, n) => crow(r, n + 1)).join('') || '<tr><td>Geen land</td></tr>'}</table>
-      <p class="muted small" style="margin-top:14px">Gemeten met satellietkaarten van de ESA, per land. Bij een woestijn tellen de landen op waar hij in ligt (het hele land, niet alleen de woestijn). De omtrek van de woestijnen is vast (Natural Earth). Bron: ${esc(d.source)}.</p>`;
+      <p class="muted small" style="margin-top:14px">Woestijn: waar gemiddeld over drie jaar minder dan 250 mm regen per jaar viel. Regen van NASA POWER (MERRA-2), op een raster van ongeveer 55 km. Klik op een woestijn of een land voor meer.</p>`;
   },
 
-  desertPanel(f) {
-    const d = this.data.bare;
-    const name = f.properties.name;
+  desertPanel(name) {
+    const d = this.dry;
     const s = d.deserts[name];
     const back = '<button class="back" id="back">← Terug naar alle woestijnen</button>';
     if (!s) return `${back}<div class="country"><h3>${esc(name)}</h3></div><p class="muted">Voor deze woestijn zijn er geen gegevens.</p>`;
     const first = d.years[0], y = this.year.woestijn;
-    const a = s.km2[0], b = s.km2[d.years.indexOf(y)];
-    const c = (b - a) / a * 100;
-    const verdict = y === first ? 'Kies een later jaar met de schuifbalk om te zien wat er veranderd is.'
-      : c > 0.25 ? `Deze woestijn is <b>groter geworden</b>: ${nl.format(b - a)} km² meer kale grond dan in ${first}.`
-      : c < -0.25 ? `Deze woestijn is <b>kleiner geworden</b>: ${nl.format(a - b)} km² minder kale grond dan in ${first}. Er zijn planten gaan groeien.`
-      : `Deze woestijn is <b>ongeveer even groot</b> gebleven als in ${first}.`;
-    const per = s.countries.map(iso3 => ({ iso3, a: this.bare(iso3, first, 'km2'), b: this.bare(iso3, y, 'km2') }));
+    const a = s[0], b = this.area(name);
+    const t = this.trend(name);
+    const small = s.reduce((p, q) => p + q, 0) / d.years.length < BIG_DESERT;
     return `${back}
-      <div class="country"><h3>${esc(name)}</h3><div class="muted small">ligt in ${esc(per.map(r => state.locations[r.iso3] ? state.locations[r.iso3].name : r.iso3).join(', '))}</div></div>
+      <div class="country"><h3>${esc(name)}</h3><div class="muted small">droog gebied in en rond de woestijn</div></div>
       <div class="compare">
-        <div><span>${first}</span><strong>${nl1.format(a / 1e6)}</strong><span>mln km² kale grond</span></div>
+        <div><span>${first}</span><strong>${nl.format(Math.round(a / 1000))}</strong><span>duizend km²</span></div>
         <div class="arrow">→</div>
-        <div><span>${y}</span><strong>${nl1.format(b / 1e6)}</strong><span>mln km² kale grond</span></div>
-        ${y !== first ? `<div class="change ${c > 0.25 ? 'bad' : c < -0.25 ? 'good' : ''}">${pct(c)}</div>` : ''}
+        <div><span>${y}</span><strong>${nl.format(Math.round(b / 1000))}</strong><span>duizend km²</span></div>
+        ${y !== first && a ? `<div class="change ${b > a ? 'bad' : b < a ? 'good' : ''}">${pct((b - a) / a * 100)}</div>` : ''}
       </div>
-      <p>${verdict}</p>
-      <h2>Kale grond per jaar (km²)</h2>
-      ${chart({ years: d.years, values: s.km2, marks: [first, y], color: '#9c5a1e', digits: 0 })}
-      <h2>Per land, ${first} → ${y}</h2>
-      <table class="ranking">${per.map(r => `<tr data-iso3="${r.iso3}"><td>${esc(state.locations[r.iso3] ? state.locations[r.iso3].name : r.iso3)}</td><td class="val"><b>${r.b - r.a > 0 ? '+' : r.b - r.a < 0 ? '−' : ''}${nl.format(Math.abs(r.b - r.a))} km²</b></td></tr>`).join('')}</table>
-      <p class="muted small" style="margin-top:14px">Opgeteld over de hele landen waar de woestijn in ligt.</p>`;
+      <p>Over alle jaren <b>${this.verdict(t)}</b> deze woestijn: ${t > 0 ? '+' : '−'}${nl1.format(Math.abs(t))}% per 10 jaar.${small ? ' Deze woestijn ligt op de grens van 250 mm regen, dus één nat of droog jaar maakt een groot verschil.' : ''}</p>
+      <h2>Woestijn per jaar (km²)</h2>
+      ${chart({ years: d.years, values: s, marks: [first, y], color: '#9c5a1e', digits: 0 })}
+      <p class="muted small" style="margin-top:14px">Alle plekken binnen de woestijn en tot ongeveer 300 km eromheen waar minder dan 250 mm regen per jaar viel (gemiddeld over drie jaar). Bron: ${esc(d.source)}.</p>`;
   },
 
   country(iso3) {
@@ -275,7 +308,7 @@ const History = {
     const d = this.data.bare;
     const s = d.countries[iso3];
     if (!s) return `${back}<div class="country"><h3>${esc(name)}</h3></div><p class="muted">Voor dit land zijn er geen gegevens.</p>`;
-    const first = d.years[0], y = this.year.woestijn;
+    const first = d.years[0], y = Math.max(first, Math.min(this.year.woestijn, d.years.at(-1)));
     const ka = this.bare(iso3, first, 'km2'), kb = this.bare(iso3, y, 'km2');
     const known = ka !== null && kb !== null;
     const change = known ? kb - ka : 0;
@@ -289,7 +322,8 @@ const History = {
       <p>${!known ? `Voor ${first} zijn er voor dit land geen cijfers.` : y === first ? 'Kies een later jaar met de schuifbalk.' : Math.abs(change) < 50 ? `De kale grond is bijna niet veranderd sinds ${first}.`
         : `Sinds ${first} is er <b>${nl.format(Math.abs(change))} km² ${change > 0 ? 'meer' : 'minder'}</b> kale grond${ka ? ` (${pct(change / ka * 100)})` : ''}${Math.abs(change) > NL_KM2 / 10 ? `, ongeveer ${nl1.format(Math.abs(change) / NL_KM2)} keer Nederland` : ''}.`}</p>
       <h2>Kale grond per jaar (km²)</h2>
-      ${chart({ years: d.years, values: s.km2, marks: [first, y], color: '#9c5a1e', digits: 0 })}`;
+      ${chart({ years: d.years, values: s.km2, marks: [first, y], color: '#9c5a1e', digits: 0 })}
+      <p class="muted small">Kale grond gemeten met satellietkaarten van de ESA (${d.years[0]}–${d.years.at(-1)}). Bron: ${esc(d.source)}.</p>`;
   },
 };
 

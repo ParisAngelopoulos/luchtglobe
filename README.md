@@ -24,8 +24,15 @@ Een 3D-wereldbol die laat zien hoe vervuild de lucht **nu** is in elk land. Elk 
 - **Ranglijst**: de tien meest vervuilde en de vijf schoonste landen van dit moment.
 - **Terug in de tijd**: elke weergave heeft een tijdschuif met een afspeelknop.
   - In **Lucht** staat de schuif rechts op *Nu* (de live metingen). Schuif je naar links, dan zie je per land het jaargemiddelde fijnstof (PM2.5) van dat jaar, terug tot 1998, met het wereldgemiddelde in een grafiek, de meest vervuilde en schoonste landen, en per land het verloop naast het WHO-advies van 5 µg/m³.
-  - In **Woestijnen** loopt de schuif van 1992 tot 2022.
-- **Woestijnen**: 20 grote woestijnen met hun naam op de wereldbol. Elke woestijn kleurt naar of hij sinds 1992 groter (bruin) of kleiner (groen) is geworden; de landen eromheen blijven grijs. Bovenaan staat het antwoord op de vraag *Is er meer woestijn gekomen?*, daaronder per woestijn de verandering. Klik op een woestijn voor de grafiek en de landen waar hij in ligt.
+  - In **Woestijnen** loopt de schuif van 1982 tot 2024.
+- **Woestijnen die groeien en krimpen**: de wereldbol laat zien waar het in het gekozen jaar woestijn was, vergeleken met 1982.
+  - **Zand**: was al woestijn in 1982.
+  - **Roodbruin**: is sindsdien woestijn geworden.
+  - **Groen**: is geen woestijn meer.
+  - **Zelf kijken**: met de schuif of de afspeelknop zie je de randen van de woestijnen verschuiven, bijvoorbeeld de Sahel ten zuiden van de Sahara.
+  - **Het antwoord**: bovenaan staat het antwoord op *Worden de woestijnen groter?*, met de trend over alle jaren. Daaronder de trend per grote woestijn.
+  - **Klik op een woestijn**: voor de oppervlakte per jaar in een grafiek.
+  - **Klik op een land**: voor de kale grond van dat land (satellietkaarten, 1992–2022).
 - **Live-indicator** met de tijd van de meting en een aftelklok tot de volgende update.
 - Werkt ook op een telefoon (de lijst schuift dan onder de wereldbol).
 
@@ -38,9 +45,14 @@ Een 3D-wereldbol die laat zien hoe vervuild de lucht **nu** is in elk land. Elk 
 5. **De geschiedenis**: `tools/build-history.js` haalt de jaarcijfers op en zet ze in `data/history.json` en `data/deserts.geojson`.
    - **Fijnstof**: per land per jaar sinds 1998.
    - **Kale grond**: per land per jaar sinds 1992. Kale grond is zand, rots en zoutvlakten, de klasse *Terrestrial barren land* in de ESA-satellietkaarten.
-   - **Woestijnen**: per woestijn zoekt het script uit in welke landen hij ligt, door punten binnen de woestijn op te zoeken in de landsgrenzen. De kale grond van die landen telt het op. Het gaat om de hele landen, niet alleen het stuk woestijn, en een land zonder cijfers voor elk jaar (zoals Soedan, dat pas sinds 2012 apart wordt geteld) telt niet mee.
+   - **Woestijnen per jaar**: `tools/build-dry.js` (`npm run build:dry`) zet ze in `data/dry.json`.
+     - **De regen**: het script haalt bij NASA POWER de regen per jaar op, vanaf 1981, op een raster van 0,625° × 0,5° (ongeveer 55 km). Het neemt alleen de gebieden met woestijnen.
+     - **Woestijn of niet**: een plek op land is woestijn als daar gemiddeld over drie jaar minder dan 250 mm regen per jaar viel. Dat is een veelgebruikte grens.
+     - **De vlakken**: per jaar tekent het script (met `d3-contour`) drie vlakken op de bol: woestijn toen en nu, nieuwe woestijn, en geen woestijn meer.
+     - **Per woestijn**: het telt de oppervlakte op die binnen de woestijn of tot 3° eromheen ligt.
+     - **De trend**: in procent per 10 jaar, berekend over alle jaren. Dat is steviger dan alleen het eerste en laatste jaar vergelijken, omdat natte en droge jaren elkaar afwisselen.
    - **De pagina**: `js/history.js` maakt er de tijdschuif en de woestijnweergave van.
-   - **Een nieuw jaar**: komt er een nieuw jaar bij de bronnen, draai dan `npm run build:history` opnieuw.
+   - **Een nieuw jaar**: komt er een nieuw jaar bij de bronnen, draai dan `npm run build:history` en `npm run build:dry` opnieuw (bij `build:dry` ook de jaartallen bovenin het script).
 
 ## Zelf draaien
 
@@ -66,6 +78,7 @@ Ga daarna naar http://localhost:8000. De landendata opnieuw bouwen kan met `npm 
 | `js/history.js` | De tijdschuif en de weergave *Woestijnen* |
 | `tools/build-data.js` | Bouwt de landsgrenzen en meetpunten in `data/` |
 | `tools/build-history.js` | Bouwt `data/history.json` en `data/deserts.geojson` |
+| `tools/build-dry.js` | Bouwt `data/dry.json`: de woestijnen per jaar uit de regendata |
 
 ## Bronnen
 
@@ -74,7 +87,8 @@ Ga daarna naar http://localhost:8000. De landendata opnieuw bouwen kan met `npm 
 - Hoofdsteden: SimpleMaps World Cities Database (CC BY 4.0), via `world-cities-json`
 - Fijnstof per jaar: SatPM, Atmospheric Composition Analysis Group, Washington University in St. Louis (country level v5-gl-06), via [Our World in Data](https://ourworldindata.org/grapher/outdoor-air-pollution-exposure)
 - Kale grond per jaar: FAO, [FAOSTAT Land Cover](https://www.fao.org/faostat/en/#data/LC), op basis van ESA Climate Change Initiative Land Cover
-- Woestijnen: Natural Earth (publiek domein), *geography regions*
+- Regen per jaar (voor de woestijnen per jaar): [NASA POWER](https://power.larc.nasa.gov/), MERRA-2
+- Namen en omtrek van de woestijnen: Natural Earth (publiek domein), *geography regions*
 - Wereldbol: [globe.gl](https://github.com/vasturiano/globe.gl) (MIT)
 
 ---
