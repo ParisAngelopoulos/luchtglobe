@@ -72,6 +72,7 @@ Ga daarna naar http://localhost:8000. De landendata opnieuw bouwen kan met `npm 
 | --- | --- |
 | `index.html`, `css/`, `js/app.js` | De pagina, de opmaak en de wereldbol |
 | `api.php` | Haalt de live data op en bewaart die 10 minuten |
+| `.htaccess` | Laat Apache de tekstbestanden gecomprimeerd versturen (`dry.json` wordt ongeveer 100 KB) |
 | `data/` | Landsgrenzen, het meetpunt per land, de jaarcijfers en de woestijnen |
 | `private/` | De cache (niet via het web te openen) |
 | `vendor/globe.gl.min.js` | De wereldbol-bibliotheek (MIT) |
