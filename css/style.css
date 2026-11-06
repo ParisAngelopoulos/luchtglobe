@@ -67,21 +67,21 @@ h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; font-weight: normal
 
 /* ---------- Now / Then and now / Deserts ---------- */
 
-.modes { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 22px; border: 1px solid var(--ink); }
+.modes { display: grid; grid-template-columns: repeat(2, 1fr); margin-top: 22px; border: 1px solid var(--ink); }
 .modes button { font: inherit; font-size: 14px; padding: 8px 6px; border: 0; background: none; color: var(--ink); cursor: pointer; }
 .modes button + button { border-left: 1px solid var(--ink); }
 .modes button:hover { background: #ebe6db; }
 .modes button.on { background: var(--ink); color: var(--paper); }
 
 body:not([data-mode="live"]) .metrics, body:not([data-mode="live"]) .live, body:not([data-mode="live"]) .legend .scale { display: none; }
-body[data-mode="live"] .history-controls { display: none; }
 
-.history-controls { margin-top: 18px; }
+.history-controls { margin-top: 18px; padding-bottom: 6px; }
 .views { display: flex; gap: 18px; border-bottom: 1px solid var(--rule); padding-bottom: 8px; }
 .views button { font: inherit; font-size: 14px; padding: 2px 0; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); cursor: pointer; }
 .views button:hover { color: var(--ink); }
 .views button.on { color: var(--ink); border-bottom-color: var(--ink); }
-.years { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+.years { display: flex; align-items: center; gap: 12px; }
+.year-ends { display: flex; justify-content: space-between; margin: 2px 64px 0 46px; font-size: 11px; color: var(--muted); }
 .years input { flex: 1; accent-color: var(--ink); }
 .years output { font-family: Georgia, serif; font-size: 22px; min-width: 52px; text-align: right; font-variant-numeric: tabular-nums; }
 .play { width: 34px; height: 34px; flex: none; border: 1px solid var(--ink); background: var(--paper); color: var(--ink); cursor: pointer; font-size: 12px; }
@@ -95,6 +95,14 @@ body[data-mode="live"] .history-controls { display: none; }
 .compare .change { margin-left: auto; align-self: center; padding: 4px 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .compare .change.good { background: #cfe0c3; color: #1f5a35; }
 .compare .change.bad { background: #f2c09a; color: #7a2a1d; }
+.answer { display: flex; flex-direction: column; gap: 4px; margin-top: 20px; padding: 14px 16px; background: #fff; border-left: 4px solid #9c5a1e; }
+.answer strong { font-family: Georgia, serif; font-weight: normal; font-size: 24px; line-height: 1.2; }
+.answer span { font-size: 14px; }
+.explain { font-size: 14px; margin: 16px 0 0; }
+.tag { padding: 0 6px; font-weight: 600; }
+.tag.brown { background: #c4813a; color: #fff; }
+.tag.green { background: #6fae7c; color: #fff; }
+.ranking.deserts td:first-child { padding-left: 2px; }
 .link { font: inherit; font-size: 14px; background: none; border: 0; padding: 0; margin-top: 14px; color: var(--link); cursor: pointer; }
 
 .chart { display: block; width: 100%; height: auto; margin: 4px 0 6px; overflow: visible; }

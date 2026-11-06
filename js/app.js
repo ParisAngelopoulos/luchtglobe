@@ -20,7 +20,7 @@ const LEVELS = [
 ];
 const NO_DATA = '#c9c4b8';
 
-const state = { mode: 'live', metric: 'aqi', features: [], locations: {}, data: null, selected: null, hovered: null, timer: null };
+const state = { mode: 'lucht', metric: 'aqi', features: [], locations: {}, data: null, selected: null, hovered: null, timer: null };
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -42,7 +42,7 @@ function format(value, metric = state.metric) {
 }
 
 function colorOf(feature) {
-  if (state.mode !== 'live') return History.color(feature);
+  if (History.active()) return History.color(feature);
   const l = level(valueOf(feature.properties.iso3));
   return l ? l.color : NO_DATA;
 }
@@ -60,16 +60,16 @@ const globe = Globe()($('globe'))
   .showAtmosphere(false)
   .polygonCapColor(colorOf)
   .polygonSideColor(() => 'rgba(60, 55, 45, 0.35)')
-  .polygonStrokeColor(f => (f.properties.desert ? 'rgba(110, 60, 15, 0.8)' : f === state.selected || f === state.hovered ? '#1c1b19' : 'rgba(255, 255, 255, 0.7)'))
+  .polygonStrokeColor(f => (f.properties.desert ? (f === History.selectedDesert ? '#1c1b19' : 'rgba(110, 60, 15, 0.8)') : f === state.selected || f === state.hovered ? '#1c1b19' : 'rgba(255, 255, 255, 0.7)'))
   .polygonAltitude(f => (f.properties.desert ? 0.02 : f === state.selected ? 0.03 : f === state.hovered ? 0.015 : 0.006))
   .polygonsTransitionDuration(300)
   .polygonLabel(tooltip)
   .onPolygonHover(f => {
     state.hovered = f;
     globe.polygonAltitude(globe.polygonAltitude()).polygonStrokeColor(globe.polygonStrokeColor());
-    document.body.style.cursor = f && !f.properties.desert ? 'pointer' : '';
+    document.body.style.cursor = f ? 'pointer' : '';
   })
-  .onPolygonClick(f => { if (!f.properties.desert) select(f.properties.iso3); })
+  .onPolygonClick(f => (f.properties.desert ? History.selectDesert(f) : select(f.properties.iso3)))
   // Names of the deserts (only shown in the desert view)
   .labelLat('lat').labelLng('lng').labelText('name')
   .labelSize(d => d.size).labelDotRadius(0).labelAltitude(0.025).labelResolution(3)
@@ -87,7 +87,7 @@ $('globe').addEventListener('pointerdown', () => { globe.controls().autoRotate =
 
 
 function tooltip(f) {
-  if (state.mode !== 'live') return History.tooltip(f);
+  if (History.active()) return History.tooltip(f);
   const iso3 = f.properties.iso3;
   const c = state.data && state.data.countries[iso3];
   const place = state.locations[iso3];
@@ -201,9 +201,9 @@ function rankItem(r, nr) {
 
 function renderPanel() {
   if (state.selected) return renderCountry(state.selected.properties.iso3);
-  if (state.mode !== 'live') {
-    if (!History.data) return;
+  if (History.active()) {
     $('panel-body').innerHTML = History.panel();
+    if ($('back')) $('back').onclick = deselect;
     return bindRanking();
   }
   const m = METRICS[state.metric];
@@ -222,10 +222,9 @@ function renderPanel() {
 }
 
 function renderCountry(iso3) {
-  if (state.mode !== 'live') {
+  if (History.active()) {
     $('panel-body').innerHTML = History.country(iso3);
     $('back').onclick = deselect;
-    if ($('naar-live')) $('naar-live').onclick = () => setMode('live');
     return;
   }
   const p = state.locations[iso3];
@@ -260,22 +259,29 @@ function renderCountry(iso3) {
 }
 
 function bindRanking() {
-  document.querySelectorAll('.ranking tr').forEach(li => li.addEventListener('click', () => select(li.dataset.iso3)));
+  document.querySelectorAll('.ranking tr[data-iso3]').forEach(tr => tr.addEventListener('click', () => select(tr.dataset.iso3)));
+  document.querySelectorAll('.ranking tr[data-desert]').forEach(tr => tr.addEventListener('click', () => {
+    const f = History.deserts.find(d => d.properties.name === tr.dataset.desert);
+    if (f) History.selectDesert(f);
+  }));
 }
 
 function select(iso3) {
   const f = state.features.find(x => x.properties.iso3 === iso3);
   if (!f) return;
   state.selected = f;
+  History.selectedDesert = null;
   globe.controls().autoRotate = false;
   const p = state.locations[iso3];
   if (p) globe.pointOfView({ lat: p.lat, lng: p.lon, altitude: isMobile() ? 2.4 : 1.6 }, 1000);
   repaint();
   renderPanel();
+  document.querySelector('.side').scrollTop = 0;
 }
 
 function deselect() {
   state.selected = null;
+  History.selectedDesert = null;
   $('search').value = '';
   repaint();
   renderPanel();
@@ -295,7 +301,7 @@ function renderMetrics() {
 }
 
 function renderLegend() {
-  if (state.mode !== 'live') return History.legend();
+  if (History.active()) return History.legend();
   const m = METRICS[state.metric];
   const edges = [0, ...m.bands];
   $('legend').innerHTML = `<strong>${esc(m.name)}${m.unit ? ' (' + m.unit + ')' : ''}</strong><div class="scale">` +
@@ -306,31 +312,31 @@ function renderLegend() {
 // ---------- Now, then and now, deserts ----------
 
 const INTRO = {
-  live: 'De luchtkwaliteit van dit moment in de hoofdstad van elk land. Draai aan de wereldbol of klik op een land.',
-  lucht: 'Hoe schoon was de lucht tien jaar geleden, en hoe is het nu? Groen is schoner geworden, rood vuiler.',
-  woestijn: 'Groeien de woestijnen of krimpen ze? Per land hoeveel kale grond er is, gemeten met satellieten sinds 1992.',
+  live: 'De luchtkwaliteit van dit moment in de hoofdstad van elk land. Schuif naar links om terug te gaan in de tijd.',
+  verleden: 'Het jaargemiddelde fijnstof per land, gemeten met satellieten. Schuif helemaal naar rechts voor de lucht van nu.',
+  woestijn: 'Groeien de woestijnen of krimpen ze? Schuif door de jaren en kijk hoe de kleur van elke woestijn verandert.',
 };
 
-async function setMode(mode) {
-  if (mode !== 'live') {
-    try {
-      await History.load();
-    } catch (e) {
-      $('panel-body').innerHTML = '<p class="muted">De gegevens konden niet worden geladen. Probeer het later opnieuw.</p>';
-      return;
-    }
-  }
-  History.stop();
-  state.mode = mode;
-  document.body.dataset.mode = mode;
-  document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
-  $('intro').textContent = INTRO[mode];
-  globe.polygonsData(mode === 'woestijn' ? state.features.concat(History.deserts) : state.features);
-  globe.labelsData(mode === 'woestijn' ? History.labels : []);
-  if (mode !== 'live') History.controls();
+// Shows the current tab (Lucht or Woestijnen) and, in Lucht, either the live data or a past year
+function showMode() {
+  const view = state.mode === 'woestijn' ? 'woestijn' : History.active() ? 'verleden' : 'live';
+  document.body.dataset.mode = view;
+  document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('on', b.dataset.mode === state.mode));
+  $('intro').textContent = INTRO[view];
+  globe.polygonsData(state.mode === 'woestijn' ? state.features.concat(History.deserts) : state.features);
+  globe.labelsData(state.mode === 'woestijn' ? History.labels : []);
   renderLegend();
   repaint();
   renderPanel();
+}
+
+function setMode(mode) {
+  if (!History.data) return;
+  History.stop();
+  state.mode = mode;
+  History.selectedDesert = null;
+  History.controls();
+  showMode();
 }
 
 document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
@@ -343,4 +349,9 @@ $('search').addEventListener('change', e => {
 
 renderMetrics();
 renderLegend();
-loadStatic().then(loadLive);
+loadStatic().then(() => {
+  loadLive();
+  // The slider and the desert view need the history data
+  History.load().then(() => { History.controls(); showMode(); })
+    .catch(() => { $('history-controls').innerHTML = '<p class="muted small">De gegevens van eerdere jaren konden niet worden geladen.</p>'; });
+});
