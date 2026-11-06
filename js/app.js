@@ -60,8 +60,8 @@ const globe = Globe()($('globe'))
   .showAtmosphere(false)
   .polygonCapColor(colorOf)
   .polygonSideColor(() => 'rgba(60, 55, 45, 0.35)')
-  .polygonStrokeColor(f => (f.properties.desert ? (f === History.selectedDesert ? '#1c1b19' : 'rgba(110, 60, 15, 0.8)') : f === state.selected || f === state.hovered ? '#1c1b19' : 'rgba(255, 255, 255, 0.7)'))
-  .polygonAltitude(f => (f.properties.desert ? 0.02 : f === state.selected ? 0.03 : f === state.hovered ? 0.015 : 0.006))
+  .polygonStrokeColor(f => (f.properties.desert ? History.stroke(f) : f === state.selected || f === state.hovered ? '#1c1b19' : 'rgba(255, 255, 255, 0.7)'))
+  .polygonAltitude(f => (f.properties.desert ? 0.012 : f === state.selected ? 0.03 : f === state.hovered ? 0.015 : 0.006))
   .polygonsTransitionDuration(300)
   .polygonLabel(tooltip)
   .onPolygonHover(f => {
@@ -69,7 +69,7 @@ const globe = Globe()($('globe'))
     globe.polygonAltitude(globe.polygonAltitude()).polygonStrokeColor(globe.polygonStrokeColor());
     document.body.style.cursor = f ? 'pointer' : '';
   })
-  .onPolygonClick(f => (f.properties.desert ? History.selectDesert(f) : select(f.properties.iso3)))
+  .onPolygonClick((f, event, where) => (f.properties.desert ? History.clickDesert(where) : select(f.properties.iso3)))
   // Names of the deserts (only shown in the desert view)
   .labelLat('lat').labelLng('lng').labelText('name')
   .labelSize(d => d.size).labelDotRadius(0).labelAltitude(0.025).labelResolution(3)
@@ -261,8 +261,7 @@ function renderCountry(iso3) {
 function bindRanking() {
   document.querySelectorAll('.ranking tr[data-iso3]').forEach(tr => tr.addEventListener('click', () => select(tr.dataset.iso3)));
   document.querySelectorAll('.ranking tr[data-desert]').forEach(tr => tr.addEventListener('click', () => {
-    const f = History.deserts.find(d => d.properties.name === tr.dataset.desert);
-    if (f) History.selectDesert(f);
+    History.selectDesert(tr.dataset.desert);
   }));
 }
 
@@ -314,7 +313,7 @@ function renderLegend() {
 const INTRO = {
   live: 'De luchtkwaliteit van dit moment in de hoofdstad van elk land. Schuif naar links om terug te gaan in de tijd.',
   verleden: 'Het jaargemiddelde fijnstof per land, gemeten met satellieten. Schuif helemaal naar rechts voor de lucht van nu.',
-  woestijn: 'Groeien de woestijnen of krimpen ze? Schuif door de jaren en kijk hoe de kleur van elke woestijn verandert.',
+  woestijn: 'Groeien de woestijnen of krimpen ze? Schuif door de jaren en kijk hoe de woestijnen op de wereldbol groter of kleiner worden.',
 };
 
 // Shows the current tab (Lucht or Woestijnen) and, in Lucht, either the live data or a past year
@@ -323,7 +322,9 @@ function showMode() {
   document.body.dataset.mode = view;
   document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('on', b.dataset.mode === state.mode));
   $('intro').textContent = INTRO[view];
-  globe.polygonsData(state.mode === 'woestijn' ? state.features.concat(History.deserts) : state.features);
+  // Without a transition, so the deserts change at once when you move the slider
+  globe.polygonsTransitionDuration(state.mode === 'woestijn' ? 0 : 300);
+  globe.polygonsData(state.mode === 'woestijn' ? state.features.concat(History.dryLayers()) : state.features);
   globe.labelsData(state.mode === 'woestijn' ? History.labels : []);
   renderLegend();
   repaint();

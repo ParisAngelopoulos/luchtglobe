@@ -3,9 +3,11 @@
     "scripts": {
         "build:data": "node tools/build-data.js data",
         "vendor": "cp node_modules/globe.gl/dist/globe.gl.min.js vendor/",
-        "build:history": "node tools/build-history.js data"
+        "build:history": "node tools/build-history.js data",
+        "build:dry": "node tools/build-dry.js data"
     },
     "devDependencies": {
+        "d3-contour": "^4.0.2",
         "fflate": "0.8.3",
         "globe.gl": "2.46.2",
         "simplify-js": "1.2.4",
