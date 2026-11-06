@@ -20,7 +20,7 @@ const LEVELS = [
 ];
 const NO_DATA = '#c9c4b8';
 
-const state = { metric: 'aqi', features: [], locations: {}, data: null, selected: null, hovered: null, timer: null };
+const state = { mode: 'live', metric: 'aqi', features: [], locations: {}, data: null, selected: null, hovered: null, timer: null };
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -42,6 +42,7 @@ function format(value, metric = state.metric) {
 }
 
 function colorOf(feature) {
+  if (state.mode !== 'live') return History.color(feature);
   const l = level(valueOf(feature.properties.iso3));
   return l ? l.color : NO_DATA;
 }
@@ -59,16 +60,20 @@ const globe = Globe()($('globe'))
   .showAtmosphere(false)
   .polygonCapColor(colorOf)
   .polygonSideColor(() => 'rgba(60, 55, 45, 0.35)')
-  .polygonStrokeColor(f => (f === state.selected || f === state.hovered ? '#1c1b19' : 'rgba(255, 255, 255, 0.7)'))
-  .polygonAltitude(f => (f === state.selected ? 0.03 : f === state.hovered ? 0.015 : 0.006))
+  .polygonStrokeColor(f => (f.properties.desert ? 'rgba(110, 60, 15, 0.8)' : f === state.selected || f === state.hovered ? '#1c1b19' : 'rgba(255, 255, 255, 0.7)'))
+  .polygonAltitude(f => (f.properties.desert ? 0.02 : f === state.selected ? 0.03 : f === state.hovered ? 0.015 : 0.006))
   .polygonsTransitionDuration(300)
   .polygonLabel(tooltip)
   .onPolygonHover(f => {
     state.hovered = f;
     globe.polygonAltitude(globe.polygonAltitude()).polygonStrokeColor(globe.polygonStrokeColor());
-    document.body.style.cursor = f ? 'pointer' : '';
+    document.body.style.cursor = f && !f.properties.desert ? 'pointer' : '';
   })
-  .onPolygonClick(f => select(f.properties.iso3));
+  .onPolygonClick(f => { if (!f.properties.desert) select(f.properties.iso3); })
+  // Names of the deserts (only shown in the desert view)
+  .labelLat('lat').labelLng('lng').labelText('name')
+  .labelSize(d => d.size).labelDotRadius(0).labelAltitude(0.025).labelResolution(3)
+  .labelColor(() => 'rgba(80, 45, 10, 0.95)');
 
 globe.globeMaterial().color.set('#e3e7e6');
 globe.globeMaterial().emissive.set('#9aa3a1');
@@ -82,6 +87,7 @@ $('globe').addEventListener('pointerdown', () => { globe.controls().autoRotate =
 
 
 function tooltip(f) {
+  if (state.mode !== 'live') return History.tooltip(f);
   const iso3 = f.properties.iso3;
   const c = state.data && state.data.countries[iso3];
   const place = state.locations[iso3];
@@ -195,6 +201,11 @@ function rankItem(r, nr) {
 
 function renderPanel() {
   if (state.selected) return renderCountry(state.selected.properties.iso3);
+  if (state.mode !== 'live') {
+    if (!History.data) return;
+    $('panel-body').innerHTML = History.panel();
+    return bindRanking();
+  }
   const m = METRICS[state.metric];
   const list = ranking();
   if (!list.length) return;
@@ -211,6 +222,12 @@ function renderPanel() {
 }
 
 function renderCountry(iso3) {
+  if (state.mode !== 'live') {
+    $('panel-body').innerHTML = History.country(iso3);
+    $('back').onclick = deselect;
+    if ($('naar-live')) $('naar-live').onclick = () => setMode('live');
+    return;
+  }
   const p = state.locations[iso3];
   const f = state.features.find(x => x.properties.iso3 === iso3);
   const c = state.data && state.data.countries[iso3];
@@ -278,12 +295,45 @@ function renderMetrics() {
 }
 
 function renderLegend() {
+  if (state.mode !== 'live') return History.legend();
   const m = METRICS[state.metric];
   const edges = [0, ...m.bands];
   $('legend').innerHTML = `<strong>${esc(m.name)}${m.unit ? ' (' + m.unit + ')' : ''}</strong><div class="scale">` +
     LEVELS.map((l, i) => `<div title="${l.name}"><i style="background:${l.color}"></i><span>${i < m.bands.length ? edges[i] + '–' + edges[i + 1] : '> ' + edges[i]}</span></div>`).join('') +
     `</div><div class="none"><span class="sw" style="background:${NO_DATA}"></span>geen meting</div>`;
 }
+
+// ---------- Now, then and now, deserts ----------
+
+const INTRO = {
+  live: 'De luchtkwaliteit van dit moment in de hoofdstad van elk land. Draai aan de wereldbol of klik op een land.',
+  lucht: 'Hoe schoon was de lucht tien jaar geleden, en hoe is het nu? Groen is schoner geworden, rood vuiler.',
+  woestijn: 'Groeien de woestijnen of krimpen ze? Per land hoeveel kale grond er is, gemeten met satellieten sinds 1992.',
+};
+
+async function setMode(mode) {
+  if (mode !== 'live') {
+    try {
+      await History.load();
+    } catch (e) {
+      $('panel-body').innerHTML = '<p class="muted">De gegevens konden niet worden geladen. Probeer het later opnieuw.</p>';
+      return;
+    }
+  }
+  History.stop();
+  state.mode = mode;
+  document.body.dataset.mode = mode;
+  document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+  $('intro').textContent = INTRO[mode];
+  globe.polygonsData(mode === 'woestijn' ? state.features.concat(History.deserts) : state.features);
+  globe.labelsData(mode === 'woestijn' ? History.labels : []);
+  if (mode !== 'live') History.controls();
+  renderLegend();
+  repaint();
+  renderPanel();
+}
+
+document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
 
 $('search').addEventListener('change', e => {
   const name = e.target.value.trim().toLowerCase();
